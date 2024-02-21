@@ -2,142 +2,92 @@
 // Created by Martin Økter on 19/12/2023.
 //
 #include <chrono>
-#include <cmath>
 #include <iostream>
+#include <csignal>
 
 #include "rclcpp/rclcpp.hpp"
 #include "std_msgs/msg/string.hpp"
 #include "geometry_msgs/msg/twist.hpp"
 
-#include "../include/icearm_struct.cc"
 #include "../include/icearm_ctrl/icearm_ctrl.h"
 
 using namespace std::chrono_literals;
 
-IceArmCtrl RobotArm;
-
 class IceArmInterface : public rclcpp::Node
 {
  public:
-  IceArmInterface() : Node("arm_control")
+  IceArmInterface()
+  : Node("arm_ctrl")
+  , RobotArm()
   {
     arm_pub_ = this->create_publisher<geometry_msgs::msg::Twist>("/icearm_pos", 10);    // Finger force publisher
-
-    arm_sub_ = this->create_subscription<geometry_msgs::msg::Twist>("/icearm_input", 10, std::bind(&IceArmInterface::set_goal_point, this, std::placeholders::_1));
-
+    arm_sub_ = this->create_subscription<geometry_msgs::msg::Twist>("/icearm_input", 10, std::bind(&IceArmInterface::set_goal_point_from_msg, this, std::placeholders::_1));
     timer_ = this->create_wall_timer(10ms, std::bind(&IceArmInterface::timer_callback, this));
 
-    GoalPoint.x = 0.05;
-    GoalPoint.y = 0.05;
-    GoalPoint.z = 0.05;
+    RobotArm.set_goal_point(0.05, 0.05, 0.05);
+
+    std::signal(SIGINT, &IceArmInterface::onShutdown);
 
     RCLCPP_INFO(this->get_logger(), "Setup completed");
   }
 
  private:
   void timer_callback() {
-
-    // This is now from subscription: set_robot_hand_pos_camera();
-
-    // Update current pos
-    CurrentPoint = NextPoint;
-
-    // Set the next point
-    if (path_time < goal_time && initialization_complete){
-      set_next_point();
+    // Check if robot reached goal
+    if (RobotArm.robotGoal()) {
+      if (!goal_registered_flag) {
+        RCLCPP_INFO(this->get_logger(), "Reached Goal");
+        goal_registered_flag = true;
+      }
     } else {
-      NextPoint = GoalPoint;
+      // Run the main loop of the robot
+      RobotArm.robotRun();
+      goal_registered_flag = false;
     }
-
-    // Calculate motor positions
-    set_servo_arm_pos();
 
     // Post new values
-    apply_arm_pos();
-
-    if (IceArm_1.arm < -1000){
-      std::cout << "------" << std::endl;
-    }
+    apply_arm_pos_to_msg();
   }
 
-  void update_current_pos() {
-    CurrentPoint = NextPoint;
+  void set_goal_point_from_msg(geometry_msgs::msg::Twist::SharedPtr msg){
+    // Update position
+    double posX = msg->linear.x;
+    double posY = msg->linear.y;
+    double posZ = msg->linear.z;
+
+    RobotArm.set_goal_point(posX, posY, posZ);
+
+    RCLCPP_INFO(this->get_logger(), "New point received");
   }
 
-  void set_next_point_main() {
-    // Set the next point
-    if (path_time < goal_time && initialization_complete){
-      set_next_point();
-    } else {
-      NextPoint = GoalPoint;
-    }
-  }
-
-  void set_goal_point(geometry_msgs::msg::Twist::SharedPtr msg){
-    std::cout << "Point received" << std::endl;
-
-    GoalPoint.x = msg->linear.x;
-    GoalPoint.y = msg->linear.y;
-    GoalPoint.z = msg->linear.z;
-
-    //goal_time = msg->angular.x;
-    initialization_complete = true;
-
-    calculate_path();
-
-    return;
-  }
-
-  void set_next_point(){
-    NextPoint.x = (ParameterX.a * path_time) + ParameterX.b;
-    NextPoint.y = (ParameterY.a * path_time) + ParameterY.b;
-    NextPoint.z = (ParameterZ.a * path_time) + ParameterZ.b;
-
-    path_time += 0.01;
-  }
-
-  void calculate_path(){
-
-    ParameterX.a = (GoalPoint.x - CurrentPoint.x)/(goal_time);
-    ParameterY.a = (GoalPoint.y - CurrentPoint.y)/(goal_time);
-    ParameterZ.a = (GoalPoint.z - CurrentPoint.z)/(goal_time);
-
-    ParameterX.b = CurrentPoint.x;
-    ParameterY.b = CurrentPoint.y;
-    ParameterZ.b = CurrentPoint.z;
-
-    path_time = 0.0;
-    return;
-  }
-
-  void apply_arm_pos()
+  void apply_arm_pos_to_msg()
   {
-    if (IceArm_1.arm < -100 or IceArm_1.forarm < -100){
-      RCLCPP_ERROR(this->get_logger(), "Pont out of reach");
-      exit(0);
-    } else {
+    ArmServoPos RobotPos_1 = RobotArm.return_robot_pos();
+
+    if (RobotArm.robotOk()){
       auto arm_msg = geometry_msgs::msg::Twist();
 
-      arm_msg.linear.x = static_cast<int>(IceArm_1.base);
-      arm_msg.linear.y = static_cast<int>(IceArm_1.arm);
-      arm_msg.linear.z = static_cast<int>(IceArm_1.forarm);
-      arm_msg.angular.x = static_cast<int>(IceArm_1.tool);
+      arm_msg.linear.x = static_cast<int>(RobotPos_1.base);
+      arm_msg.linear.y = static_cast<int>(RobotPos_1.arm);
+      arm_msg.linear.z = static_cast<int>(RobotPos_1.forarm);
+      arm_msg.angular.x = static_cast<int>(RobotPos_1.tool);
 
       arm_pub_->publish(arm_msg);
+    } else {
+      RCLCPP_ERROR(this->get_logger(), "Point out of reach");
+      exit(0);
     }
   }
 
-  void set_servo_arm_pos()
-  {
-    // set values for servos
-    float total_length = pow(NextPoint.x, 2) + pow(NextPoint.y, 2) + pow(NextPoint.z, 2);
+  static void onShutdown(int signum) {
+    if (signum == SIGINT) {
+      // Perform cleanup operations before shutting down
+      RCLCPP_INFO(rclcpp::get_logger("arm_ctrl"), "Ice gone, meltdown begun...");
+      // Add your cleanup logic here
 
-    IceArm_1.base = 57.3f * atan2f(NextPoint.y, NextPoint.x);
-    IceArm_1.arm = 114.6f * atan2f(((0.16f * NextPoint.z) + sqrt(-1.0 * total_length * (total_length - 0.0256f))) , ((0.16f * sqrt(pow(NextPoint.x,2) + pow(NextPoint.y,2))) + total_length ));
-    IceArm_1.forarm = 114.6f * atan2f(((0.16f * NextPoint.z) - sqrt(-1.0 * total_length * (total_length - 0.0256f))) , ((0.16f * sqrt(pow(NextPoint.x,2) + pow(NextPoint.y,2))) + total_length ));
-
-    //std::cout << IceArm_1.arm << std::endl;
-    return;
+      // Call the ROS 2 shutdown function
+      rclcpp::shutdown();
+    }
   }
 
   // ROS2 and publishers declarations
@@ -145,29 +95,27 @@ class IceArmInterface : public rclcpp::Node
   rclcpp::Publisher<geometry_msgs::msg::Twist>::SharedPtr arm_pub_;
   rclcpp::Subscription<geometry_msgs::msg::Twist>::SharedPtr arm_sub_;
 
-  // Finger force data struct declaration
-  ArmServoPos IceArm_1;
+  IceArmCtrl RobotArm;
 
-  ToolPos NextPoint;
-  ToolPos GoalPoint;
-  ToolPos CurrentPoint;
-
-  PathParameter ParameterX;
-  PathParameter ParameterY;
-  PathParameter ParameterZ;
-
-  float tool_size [2] = {0.55, -0.12};
-  float path_time = 0.0;
-  float goal_time = 5.0;
-  bool initialization_complete = false;
+  bool goal_registered_flag = false;
 };
 
-
+std::atomic<bool> shutdown_requested(false);
 
 int main(int argc, char * argv[])
 {
   rclcpp::init(argc, argv);
-  rclcpp::spin(std::make_shared<IceArmInterface>());
+  auto node = std::make_shared<IceArmInterface>();
+
+  // Create a SingleThreadedExecutor
+  rclcpp::executors::SingleThreadedExecutor executor;
+
+  // Add your node to the executor
+  executor.add_node(node);
+
+  // Run the executor
+  executor.spin();
+
   rclcpp::shutdown();
   return 0;
 }
