@@ -9,27 +9,12 @@
 #include "std_msgs/msg/string.hpp"
 #include "geometry_msgs/msg/twist.hpp"
 
+#include "../include/icearm_struct.cc"
+#include "../include/icearm_ctrl/icearm_ctrl.h"
+
 using namespace std::chrono_literals;
 
-struct ArmServoPos{
-  int base = 0;
-  int arm = 0;
-  int forarm = 0;
-  int tool = 0;
-};
-
-struct ToolPos{
-  float x = 0.0;
-  float y = 0.0;
-  float z = 0.0;
-};
-
-struct PathParameter{
-  float a = 0;
-  float b = 0;
-  float c = 0;
-  float d = 0;
-};
+IceArmCtrl RobotArm;
 
 class IceArmInterface : public rclcpp::Node
 {
@@ -72,6 +57,19 @@ class IceArmInterface : public rclcpp::Node
 
     if (IceArm_1.arm < -1000){
       std::cout << "------" << std::endl;
+    }
+  }
+
+  void update_current_pos() {
+    CurrentPoint = NextPoint;
+  }
+
+  void set_next_point_main() {
+    // Set the next point
+    if (path_time < goal_time && initialization_complete){
+      set_next_point();
+    } else {
+      NextPoint = GoalPoint;
     }
   }
 

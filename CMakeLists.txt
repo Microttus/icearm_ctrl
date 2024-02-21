@@ -13,8 +13,11 @@ find_package(rclcpp REQUIRED)
 find_package(std_msgs REQUIRED)
 find_package(sensor_msgs REQUIRED)
 
+# Find sub-folders
+include_directories(include)
+
 # Build Settings
-add_executable(icearm_ctrl src/main.cc)
+add_executable(icearm_ctrl src/main.cc src/icearm_ctrl.cc)
 
 ament_target_dependencies(icearm_ctrl
         std_msgs
