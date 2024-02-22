@@ -15,6 +15,12 @@ on inverse kinematics and path planing**
 5. Launch the application
 6. Post new coordinated to the /icearm_input topic
 
+## Hardware
+
+The code is applied and tested with the EEZYbot MK1 and MK2
+
+Project available on [EEZYbot MK2](https://www.thingiverse.com/thing:1454048/files)
+
 ## Additional information
 
 The project consist of a c++ library with basic functions, 
