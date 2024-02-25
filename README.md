@@ -28,6 +28,3 @@ and a facade class for ROS compatibility.
 The library can be used separately for control of other platforms are 
 to be used. 
 
-- [ ] blir dette sjekkmark
-- [x] forsøk 2
-
