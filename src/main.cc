@@ -9,6 +9,8 @@
 #include "std_msgs/msg/string.hpp"
 #include "geometry_msgs/msg/twist.hpp"
 
+#include "../include/icearm_ctrl/ice_serial_servo.h"
+
 using namespace std::chrono_literals;
 
 struct ArmServoPos{
@@ -34,17 +36,17 @@ struct PathParameter{
 class IceArmInterface : public rclcpp::Node
 {
  public:
-  IceArmInterface() : Node("arm_control")
+  IceArmInterface() : Node("arm_control"), arm_control_("/dev/ttyUSB0", 115200)
   {
-    arm_pub_ = this->create_publisher<geometry_msgs::msg::Twist>("/icearm_pos", 10);    // Finger force publisher
+  //arm_pub_ = this->create_publisher<geometry_msgs::msg::Twist>("/icearm_pos", 10);    // Finger force publisher
 
     arm_sub_ = this->create_subscription<geometry_msgs::msg::Twist>("/icearm_input", 10, std::bind(&IceArmInterface::set_goal_point, this, std::placeholders::_1));
 
-    timer_ = this->create_wall_timer(10ms, std::bind(&IceArmInterface::timer_callback, this));
+    timer_ = this->create_wall_timer(50ms, std::bind(&IceArmInterface::timer_callback, this));
 
-    GoalPoint.x = 0.05;
+    GoalPoint.x = 0.00;
     GoalPoint.y = 0.05;
-    GoalPoint.z = 0.05;
+    GoalPoint.z = 0.10;
 
     RCLCPP_INFO(this->get_logger(), "Setup completed");
   }
@@ -95,7 +97,7 @@ class IceArmInterface : public rclcpp::Node
     NextPoint.y = (ParameterY.a * path_time) + ParameterY.b;
     NextPoint.z = (ParameterZ.a * path_time) + ParameterZ.b;
 
-    path_time += 0.01;
+    path_time += 0.05;
   }
 
   void calculate_path(){
@@ -115,17 +117,27 @@ class IceArmInterface : public rclcpp::Node
   void apply_arm_pos()
   {
     if (IceArm_1.arm < -100 or IceArm_1.forarm < -100){
-      RCLCPP_ERROR(this->get_logger(), "Pont out of reach");
+      RCLCPP_ERROR(this->get_logger(), "Point out of reach");
       exit(0);
     } else {
-      auto arm_msg = geometry_msgs::msg::Twist();
+//      auto arm_msg = geometry_msgs::msg::Twist();
+//
+//      arm_msg.linear.x = static_cast<int>(IceArm_1.base);
+//      arm_msg.linear.y = static_cast<int>(IceArm_1.arm);
+//      arm_msg.linear.z = static_cast<int>(IceArm_1.forarm) + 90;
+//      arm_msg.angular.x = static_cast<int>(IceArm_1.tool);
+//
+//      arm_pub_->publish(arm_msg);¨
 
-      arm_msg.linear.x = static_cast<int>(IceArm_1.base);
-      arm_msg.linear.y = static_cast<int>(IceArm_1.arm);
-      arm_msg.linear.z = static_cast<int>(IceArm_1.forarm);
-      arm_msg.angular.x = static_cast<int>(IceArm_1.tool);
+      std::vector<int> ServoPos = {};
+      ServoPos.push_back(static_cast<int>(IceArm_1.base));
+      ServoPos.push_back(static_cast<int>(IceArm_1.arm));
+      ServoPos.push_back(static_cast<int>(IceArm_1.forarm) + 90);
+      ServoPos.push_back(static_cast<int>(IceArm_1.tool));
+      ServoPos.push_back(0);
+      ServoPos.push_back(0);
 
-      arm_pub_->publish(arm_msg);
+      arm_control_.SendServoValues(ServoPos);
     }
   }
 
@@ -144,7 +156,7 @@ class IceArmInterface : public rclcpp::Node
 
   // ROS2 and publishers declarations
   rclcpp::TimerBase::SharedPtr timer_;
-  rclcpp::Publisher<geometry_msgs::msg::Twist>::SharedPtr arm_pub_;
+  //rclcpp::Publisher<geometry_msgs::msg::Twist>::SharedPtr arm_pub_;
   rclcpp::Subscription<geometry_msgs::msg::Twist>::SharedPtr arm_sub_;
 
   // Finger force data struct declaration
@@ -162,6 +174,9 @@ class IceArmInterface : public rclcpp::Node
   float path_time = 0.0;
   float goal_time = 5.0;
   bool initialization_complete = false;
+
+  // Serial communication
+  IceSerialServo arm_control_;
 };
 
 

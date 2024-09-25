@@ -12,14 +12,18 @@ find_package(ament_cmake REQUIRED)
 find_package(rclcpp REQUIRED)
 find_package(std_msgs REQUIRED)
 find_package(sensor_msgs REQUIRED)
+find_package(Boost REQUIRED COMPONENTS system)
+
+include_directories(${Boost_INCLUDE_DIRS})
 
 # Build Settings
-add_executable(icearm_ctrl src/main.cc)
+add_executable(icearm_ctrl src/main.cc src/ice_serial_servo.cc)
 
 ament_target_dependencies(icearm_ctrl
         std_msgs
         rclcpp
         sensor_msgs
+        ${Boost_LIBRARIES}
 )
 
 install(TARGETS
