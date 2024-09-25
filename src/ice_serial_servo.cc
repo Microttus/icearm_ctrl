@@ -47,11 +47,11 @@ void IceSerialServo::OpenSerialPort() {
 
 void IceSerialServo::SendServoValues(const std::vector<int> &servo_values) {
   if (servo_values.size() != 6) {
-    throw std::invalid_argument("You must provide exactly 6 servo values.")
+    throw std::invalid_argument("You must provide exactly 6 servo values.");
   }
 
   if (!serial_port_.is_open()) {
-    throw std::runtime_error("Serial port is not open.")
+    throw std::runtime_error("Serial port is not open.");
   }
 
   // Convert servo values to a comma-separated string
