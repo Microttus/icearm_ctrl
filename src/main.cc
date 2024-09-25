@@ -10,6 +10,7 @@
 #include "geometry_msgs/msg/twist.hpp"
 
 #include "../include/icearm_ctrl/icearm_ctrl.h"
+#include "../include/icearm_ctrl/ice_serial_servo.h"
 
 using namespace std::chrono_literals;
 
@@ -19,8 +20,9 @@ class IceArmInterface : public rclcpp::Node
   IceArmInterface()
   : Node("arm_ctrl")
   , RobotArm()
+  , arm_control_("/dev/ttyUSB0", 115200)
   {
-    arm_pub_ = this->create_publisher<geometry_msgs::msg::Twist>("/icearm_pos", 10);    // Finger force publisher
+    //arm_pub_ = this->create_publisher<geometry_msgs::msg::Twist>("/icearm_pos", 10);    // Finger force publisher
     arm_sub_ = this->create_subscription<geometry_msgs::msg::Twist>("/icearm_input", 10, std::bind(&IceArmInterface::set_goal_point_from_msg, this, std::placeholders::_1));
     timer_ = this->create_wall_timer(10ms, std::bind(&IceArmInterface::timer_callback, this));
 
@@ -28,7 +30,7 @@ class IceArmInterface : public rclcpp::Node
 
     std::signal(SIGINT, &IceArmInterface::onShutdown);
 
-    RCLCPP_INFO(this->get_logger(), "Setup completed");
+    RCLCPP_INFO(this->get_logger(), "Setup completed. Ready to receive input position on /icearm_input");
   }
 
  private:
@@ -65,14 +67,24 @@ class IceArmInterface : public rclcpp::Node
     ArmServoPos RobotPos_1 = RobotArm.return_robot_pos();
 
     if (RobotArm.robotOk()){
-      auto arm_msg = geometry_msgs::msg::Twist();
+//      auto arm_msg = geometry_msgs::msg::Twist();
+//
+//      arm_msg.linear.x = static_cast<int>(RobotPos_1.base);
+//      arm_msg.linear.y = static_cast<int>(RobotPos_1.arm);
+//      arm_msg.linear.z = static_cast<int>(RobotPos_1.forarm);
+//      arm_msg.angular.x = static_cast<int>(RobotPos_1.tool);
+//
+//      arm_pub_->publish(arm_msg);¨
 
-      arm_msg.linear.x = static_cast<int>(RobotPos_1.base);
-      arm_msg.linear.y = static_cast<int>(RobotPos_1.arm);
-      arm_msg.linear.z = static_cast<int>(RobotPos_1.forarm);
-      arm_msg.angular.x = static_cast<int>(RobotPos_1.tool);
+      std::vector<int> servo_pos = {};
+      servo_pos.push_back(static_cast<int>(RobotPos_1.base));
+      servo_pos.push_back(static_cast<int>(RobotPos_1.arm));
+      servo_pos.push_back(static_cast<int>(RobotPos_1.forarm));
+      servo_pos.push_back(static_cast<int>(RobotPos_1.tool));
+      servo_pos.push_back(0);
+      servo_pos.push_back(0);
 
-      arm_pub_->publish(arm_msg);
+      arm_control_.SendServoValues(servo_pos);
     } else {
       RCLCPP_ERROR(this->get_logger(), "Point out of reach");
       exit(0);
@@ -96,6 +108,7 @@ class IceArmInterface : public rclcpp::Node
   rclcpp::Subscription<geometry_msgs::msg::Twist>::SharedPtr arm_sub_;
 
   IceArmCtrl RobotArm;
+  IceSerialServo arm_control_;
 
   bool goal_registered_flag = false;
 };
