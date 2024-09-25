@@ -27,7 +27,7 @@ ament_target_dependencies(icearm_ctrl
 )
 
 # Link Boost libraries
-target_link_libraries(servo_node
+target_link_libraries(icearm_ctrl
         ${Boost_LIBRARIES}
 )
 
