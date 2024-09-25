@@ -14,10 +14,8 @@ find_package(std_msgs REQUIRED)
 find_package(sensor_msgs REQUIRED)
 find_package(Boost REQUIRED COMPONENTS system)
 
-include_directories(${Boost_INCLUDE_DIRS})
-
 # Find sub-folders
-include_directories(include)
+include_directories(include ${Boost_INCLUDE_DIRS})
 
 # Build Settings
 add_executable(icearm_ctrl src/main.cc src/ice_serial_servo.cc src/icearm_ctrl.cc)
@@ -26,6 +24,10 @@ ament_target_dependencies(icearm_ctrl
         std_msgs
         rclcpp
         sensor_msgs
+)
+
+# Link Boost libraries
+target_link_libraries(servo_node
         ${Boost_LIBRARIES}
 )
 
