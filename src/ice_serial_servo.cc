@@ -2,6 +2,9 @@
 // Created by Martin Økter on 25/09/2024.
 //
 
+#include <iostream>
+#include <thread>
+
 #include "../include/icearm_ctrl/ice_serial_servo.h"
 
 IceSerialServo::IceSerialServo(const std::string &port, unsigned int baud_rate)
