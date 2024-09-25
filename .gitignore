@@ -1,2 +1,6 @@
+<<<<<<< HEAD
 # Project exclude paths
 /cmake-build-debug/
+=======
+/.idea/
+>>>>>>> origin/main

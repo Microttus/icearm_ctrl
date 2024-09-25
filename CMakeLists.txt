@@ -16,8 +16,11 @@ find_package(Boost REQUIRED COMPONENTS system)
 
 include_directories(${Boost_INCLUDE_DIRS})
 
+# Find sub-folders
+include_directories(include)
+
 # Build Settings
-add_executable(icearm_ctrl src/main.cc src/ice_serial_servo.cc)
+add_executable(icearm_ctrl src/main.cc src/ice_serial_servo.cc src/icearm_ctrl.cc)
 
 ament_target_dependencies(icearm_ctrl
         std_msgs
